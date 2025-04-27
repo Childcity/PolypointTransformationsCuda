@@ -53,15 +53,13 @@ __device__ void solve4x4(const double A[16], const double B[4], double X[4])
 	}
 }
 
+// clang-format off
 __device__ geom::Plane getPolypointPlaneCUDA(
     const geom::Plane &plane, const double3 *origBasises, const double3 *resBasises, int basisCount)
 {
-	double a1 = 0, b1 = 0, c1 = 0, d1 = 0, r1 = 0;
-	double b2 = 0, c2 = 0, d2 = 0, r2 = 0;
-	double c3 = 0, d3 = 0, r3 = 0;
-	double d4 = 0, r4 = 0;
+	double acc[14] = {0.0}; // instead a1, b1, c1, ..., d4
+	double rhs[4] = {0.0}; // instead r1, r2, r3, r4
 
-	// clang-format off
 	for (int i = 0; i < basisCount; ++i) {
 		const double3 &orig_basis_p = origBasises[i];
 		const double3 &res_basis_p = resBasises[i];
@@ -74,40 +72,40 @@ __device__ geom::Plane getPolypointPlaneCUDA(
 		const double y = res_basis_p.y;
 		const double z = res_basis_p.z;
 
-		a1 += x * x * gamma_squared_inv;	// x * x / gamma_squared;
-		b1 += x * y * gamma_squared_inv;	// x * y / gamma_squared;
-		c1 += x * z * gamma_squared_inv;	// x * z / gamma_squared;
-		d1 += x * gamma_squared_inv;		// x / gamma_squared;
+		acc[0] += x * x * gamma_squared_inv; // a1 = x * x / gamma_squared;
+		acc[1] += x * y * gamma_squared_inv; // b1 = x * y / gamma_squared;
+		acc[2] += x * z * gamma_squared_inv; // c1 = x * z / gamma_squared;
+		acc[3] += x * gamma_squared_inv;     // d1 = x / gamma_squared;
 
-		b2 += y * y * gamma_squared_inv;	// y * y / gamma_squared;
-		c2 += y * z * gamma_squared_inv;	// y * z / gamma_squared;
-		d2 += y * gamma_squared_inv;		// y / gamma_squared;
+		acc[4] += y * y * gamma_squared_inv; // b2 = y * y / gamma_squared;
+		acc[5] += y * z * gamma_squared_inv; // c2 = y * z / gamma_squared;
+		acc[6] += y * gamma_squared_inv;     // d2 = y / gamma_squared;
 
-		c3 += z * z * gamma_squared_inv;	// z * z / gamma_squared;
-		d3 += z * gamma_squared_inv;		// z / gamma_squared;
+		acc[7] += z * z * gamma_squared_inv; // c3 = z * z / gamma_squared;
+		acc[8] += z * gamma_squared_inv;     // d3 = z / gamma_squared;
 
-		d4 += gamma_squared_inv;			// 1 / gamma_squared;
+		acc[9]  += gamma_squared_inv;        // d4 = 1 / gamma_squared;
 
-		r1 += x * gamma_inv;				// x / gamma;
-		r2 += y * gamma_inv;				// y / gamma;
-		r3 += z * gamma_inv;				// z / gamma;
-		r4 += gamma_inv;					// 1 / gamma;
+		rhs[0] += x * gamma_inv;             // r1 = x / gamma;
+		rhs[1] += y * gamma_inv;             // r2 = y / gamma;
+		rhs[2] += z * gamma_inv;             // r3 = z / gamma;
+		rhs[3] += gamma_inv;                 // r4 = 1 / gamma;
 	}
 
-    const double A[16] = {
-        a1 + consts::reg_term, b1, c1, d1,
-        b1, b2 + consts::reg_term, c2, d2,
-        c1, c2, c3 + consts::reg_term, d3,
-        d1, d2, d3, d4 + consts::reg_term
-    };
-	// clang-format on
+	const double A[16] = {
+	    acc[0] + consts::reg_term, acc[1], acc[2], acc[3],
+	    acc[1], acc[4] + consts::reg_term, acc[5], acc[6],
+	    acc[2], acc[5], acc[7] + consts::reg_term, acc[8],
+	    acc[3], acc[6], acc[8], acc[9] + consts::reg_term,
+	};
 
-	const double B[4] = {r1, r2, r3, r4};
 	double X[4];
-	solve4x4(A, B, X);
+	solve4x4(A, rhs, X);
 
 	return geom::Plane{plane.id, X[0], X[1], X[2], X[3]};
 }
+
+// clang-format on
 
 // Deform each plain on CUDA thread
 __global__ void deformPlanesPolypointKernel(

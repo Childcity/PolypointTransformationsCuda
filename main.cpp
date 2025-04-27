@@ -91,7 +91,7 @@ geom::PlaneList serialApproach(
 
 	ElapsedTimer timer;
 	for (size_t i = 0; i < inPlanes.size(); ++i) {
-		//result.push_back(geom::getPolypointPlane(inPlanes[i], basis_in, basis_out));
+		// result.push_back(geom::getPolypointPlane(inPlanes[i], basis_in, basis_out));
 	}
 	double elapsed = timer.elapsedSec();
 
@@ -130,8 +130,8 @@ geom::PlaneList threadChunkApproach(
 
 		threads.push_back(thread([&, startIdx, endIdx, i] {
 			for (size_t j = startIdx; j < endIdx; ++j) {
-				//threadResults[i].push_back(
-				    //geom::getPolypointPlane(inPlanes[j], basis_in, basis_out));
+				// threadResults[i].push_back(
+				// geom::getPolypointPlane(inPlanes[j], basis_in, basis_out));
 			}
 		}));
 	}
@@ -181,7 +181,7 @@ int main(int argc, char *argv[])
 		}
 
 		double avg = accumulate(times.begin(), times.end(), 0.0) / runEachExperiment;
-		cout << avg << endl;
+		cout << "Average of " << runEachExperiment << " run time: " << avg << " seconds\n";
 	}
 
 	return 0;
