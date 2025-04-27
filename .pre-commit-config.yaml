@@ -1,0 +1,54 @@
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+
+minimum_pre_commit_version: "3.2.1"
+
+default_install_hook_types: [pre-commit]
+
+default_language_version:
+  python: python
+
+fail_fast: false
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks.git
+    rev: v4.5.0
+    hooks:
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-executables-have-shebangs
+      - id: check-added-large-files
+
+  - repo: local
+    hooks:
+      - id: prettier
+        name: prettier
+        additional_dependencies: ["prettier@3.0.0-alpha.0"]
+        entry: prettier --write --list-different --ignore-unknown
+        language: node
+        types: [text]
+        files: \.(yaml|yml)$
+
+      - id: clang-format
+        name: clang-format
+        entry: clang-format -i
+        args: ["-fallback-style=none"]
+        language: python
+        additional_dependencies: ["clang-format==16.0.6"]
+        types_or: [c, c++, cuda]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks.git
+    rev: v4.5.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: fix-byte-order-marker
+      - id: trailing-whitespace
+
+  # Meta chackers used to check current config file
+  - repo: meta
+    hooks:
+      - id: check-useless-excludes
+        files: \.(yaml|yml)$
+
+      - id: check-hooks-apply
+        files: \.(yaml|yml)$
