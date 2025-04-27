@@ -116,12 +116,24 @@ __global__ void deformPlanesPolypointKernel(
     int basisCount,
     int planeCount)
 {
+	extern __shared__ double3 sharedMemory[]; // dynamic shared memory
+	double3 *sharedOrigBasises = sharedMemory;
+	double3 *sharedResBasises = sharedMemory + basisCount;
+
+	// Only one thread per block loads origBasises and resBasises into shared memory
+	for (int i = threadIdx.x; i < basisCount; i += blockDim.x) {
+		sharedOrigBasises[i] = origBasises[i];
+		sharedResBasises[i] = resBasises[i];
+	}
+	__syncthreads(); // wait for all threads to finish copying
+
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 	if (idx >= planeCount) {
 		return;
 	}
 
-	outPlanes[idx] = getPolypointPlaneCUDA(inPlanes[idx], origBasises, resBasises, basisCount);
+	outPlanes[idx] = getPolypointPlaneCUDA(
+	    inPlanes[idx], sharedOrigBasises, sharedResBasises, basisCount);
 }
 
 void deformPlanesPolypoint(
@@ -143,8 +155,10 @@ void deformPlanesPolypoint(
 	thrust::device_vector<double3> d_resBasises = resBasises;
 
 	// Launch kernel
-	int blockSize = 256;
+	int blockSize = 1024;
 	int gridSize = (planeCount + blockSize - 1) / blockSize;
+	std::cout
+	    << "CUDA SM config: blockSize: " << blockSize << ", gridSize: " << gridSize << std::endl;
 
 	deformPlanesPolypointKernel<<<gridSize, blockSize>>>(
 	    thrust::raw_pointer_cast(d_inPlanes.data()),
