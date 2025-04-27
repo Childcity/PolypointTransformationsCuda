@@ -136,6 +136,15 @@ __global__ void deformPlanesPolypointKernel(
 	    inPlanes[idx], sharedOrigBasises, sharedResBasises, basisCount);
 }
 
+void checkErrorCUDA(const char *msg)
+{
+	cudaError_t err = cudaGetLastError();
+	if (err != cudaSuccess) {
+		std::cerr << "CUDA Error: " << msg << ": " << cudaGetErrorString(err) << std::endl;
+		exit(EXIT_FAILURE);
+	}
+}
+
 void deformPlanesPolypoint(
     __out geom::PlaneList &outPlanes,
     const geom::PlaneList &inPlanes,
@@ -155,19 +164,25 @@ void deformPlanesPolypoint(
 	thrust::device_vector<double3> d_resBasises = resBasises;
 
 	// Launch kernel
-	int blockSize = 1024;
+	int blockSize = 512;
 	int gridSize = (planeCount + blockSize - 1) / blockSize;
-	std::cout
-	    << "CUDA SM config: blockSize: " << blockSize << ", gridSize: " << gridSize << std::endl;
+	size_t sharedMemSize = 2 * basisCount * sizeof(double3);
+	std::cout << "CUDA SM config: blockSize: " << blockSize << ", gridSize: " << gridSize
+	          << ", sharedMemSize: " << sharedMemSize << std::endl;
 
-	deformPlanesPolypointKernel<<<gridSize, blockSize>>>(
+	deformPlanesPolypointKernel<<<gridSize, blockSize, sharedMemSize>>>(
 	    thrust::raw_pointer_cast(d_inPlanes.data()),
 	    thrust::raw_pointer_cast(d_outPlanes.data()),
 	    thrust::raw_pointer_cast(d_origBasises.data()),
 	    thrust::raw_pointer_cast(d_resBasises.data()),
 	    basisCount,
 	    planeCount);
+
+	checkErrorCUDA("Kernel launch failed");
+
 	cudaDeviceSynchronize();
+
+	checkErrorCUDA("Kernel execution failed");
 
 	// Download result from GPU
 	outPlanes.resize(planeCount);
