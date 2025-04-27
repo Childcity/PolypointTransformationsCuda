@@ -61,39 +61,40 @@ __device__ geom::Plane getPolypointPlaneCUDA(
 	double c3 = 0, d3 = 0, r3 = 0;
 	double d4 = 0, r4 = 0;
 
+	// clang-format off
 	for (int i = 0; i < basisCount; ++i) {
 		const double3 &orig_basis_p = origBasises[i];
 		const double3 &res_basis_p = resBasises[i];
 
-		double gamma = signDistance(plane, orig_basis_p);
-		double gamma_squared = gamma * gamma;
+		const double gamma = signDistance(plane, orig_basis_p);
+		const double gamma_inv = __drcp_rn(gamma); // device func: fast approximate "1 / gamma"
+		const double gamma_squared_inv = gamma_inv * gamma_inv; // device func: "1 / gamma^2"
 
-		double x = res_basis_p.x;
-		double y = res_basis_p.y;
-		double z = res_basis_p.z;
+		const double x = res_basis_p.x;
+		const double y = res_basis_p.y;
+		const double z = res_basis_p.z;
 
-		a1 += x * x / gamma_squared;
-		b1 += x * y / gamma_squared;
-		c1 += x * z / gamma_squared;
-		d1 += x / gamma_squared;
+		a1 += x * x * gamma_squared_inv;	// x * x / gamma_squared;
+		b1 += x * y * gamma_squared_inv;	// x * y / gamma_squared;
+		c1 += x * z * gamma_squared_inv;	// x * z / gamma_squared;
+		d1 += x * gamma_squared_inv;		// x / gamma_squared;
 
-		b2 += y * y / gamma_squared;
-		c2 += y * z / gamma_squared;
-		d2 += y / gamma_squared;
+		b2 += y * y * gamma_squared_inv;	// y * y / gamma_squared;
+		c2 += y * z * gamma_squared_inv;	// y * z / gamma_squared;
+		d2 += y * gamma_squared_inv;		// y / gamma_squared;
 
-		c3 += z * z / gamma_squared;
-		d3 += z / gamma_squared;
+		c3 += z * z * gamma_squared_inv;	// z * z / gamma_squared;
+		d3 += z * gamma_squared_inv;		// z / gamma_squared;
 
-		d4 += 1.0 / gamma_squared;
+		d4 += gamma_squared_inv;			// 1 / gamma_squared;
 
-		r1 += x / gamma;
-		r2 += y / gamma;
-		r3 += z / gamma;
-		r4 += 1.0 / gamma;
+		r1 += x * gamma_inv;				// x / gamma;
+		r2 += y * gamma_inv;				// y / gamma;
+		r3 += z * gamma_inv;				// z / gamma;
+		r4 += gamma_inv;					// 1 / gamma;
 	}
 
-	// clang-format off
-    double A[16] = {
+    const double A[16] = {
         a1 + consts::reg_term, b1, c1, d1,
         b1, b2 + consts::reg_term, c2, d2,
         c1, c2, c3 + consts::reg_term, d3,
@@ -101,7 +102,7 @@ __device__ geom::Plane getPolypointPlaneCUDA(
     };
 	// clang-format on
 
-	double B[4] = {r1, r2, r3, r4};
+	const double B[4] = {r1, r2, r3, r4};
 	double X[4];
 	solve4x4(A, B, X);
 
