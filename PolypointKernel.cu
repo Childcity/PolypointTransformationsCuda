@@ -7,7 +7,10 @@ namespace gpu {
 
 __device__ double signDistance(const geom::Plane &p, const double3 &point)
 {
-	return p.a * point.x + p.b * point.y + p.c * point.z + p.d;
+	// p.a * point.x + p.b * point.y + p.c * point.z + p.d;
+	double t = fma(p.c, point.z, p.d); // p.c*point.z + p.d
+	t = fma(p.b, point.y, t); // p.b*point.y + t
+	return fma(p.a, point.x, t); // p.a*point.x + t
 }
 
 __device__ void solve4x4(const double A[16], const double B[4], double X[4])
@@ -37,7 +40,7 @@ __device__ void solve4x4(const double A[16], const double B[4], double X[4])
 			double factor = M[k][i];
 #pragma unroll
 			for (int j = i; j <= 4; ++j) {
-				M[k][j] -= factor * M[i][j];
+				M[k][j] = fma(-factor, M[i][j], M[k][j]); // M[k][j] -= factor * M[i][j];
 			}
 		}
 	}
@@ -48,48 +51,50 @@ __device__ void solve4x4(const double A[16], const double B[4], double X[4])
 		X[i] = M[i][4];
 #pragma unroll
 		for (int j = i + 1; j < 4; ++j) {
-			X[i] -= M[i][j] * X[j];
+			X[i] = fma(-M[i][j], X[j], X[i]); // X[i] -= M[i][j] * X[j];
 		}
 	}
 }
 
 // clang-format off
 __device__ geom::Plane getPolypointPlaneCUDA(
-    const geom::Plane &plane, const double3 *origBasises, const double3 *resBasises, int basisCount)
+	const geom::Plane &plane, const double3 *origBasises, const double3 *resBasises, int basisCount)
 {
-	double acc[14] = {0.0}; // instead a1, b1, c1, ..., d4
-	double rhs[4] = {0.0}; // instead r1, r2, r3, r4
+	double acc[14] = {0.0};
+	double rhs[4]  = {0.0};
 
 	for (int i = 0; i < basisCount; ++i) {
 		const double3 &orig_basis_p = origBasises[i];
-		const double3 &res_basis_p = resBasises[i];
+		const double3 &res_basis_p  = resBasises[i];
 
-		const double gamma = signDistance(plane, orig_basis_p);
-		const double gamma_inv = __drcp_rn(gamma); // device func: fast approximate "1 / gamma"
-		const double gamma_squared_inv = gamma_inv * gamma_inv; // device func: "1 / gamma^2"
+		const double gamma		   = signDistance(plane, orig_basis_p);
+		const double gamma_inv	   = __drcp_rn(gamma);
+		const double gamma_sq_inv	= gamma_inv * gamma_inv;
 
 		const double x = res_basis_p.x;
 		const double y = res_basis_p.y;
 		const double z = res_basis_p.z;
 
-		acc[0] += x * x * gamma_squared_inv; // a1 = x * x / gamma_squared;
-		acc[1] += x * y * gamma_squared_inv; // b1 = x * y / gamma_squared;
-		acc[2] += x * z * gamma_squared_inv; // c1 = x * z / gamma_squared;
-		acc[3] += x * gamma_squared_inv;     // d1 = x / gamma_squared;
+		// Accumulate with FMA
+		acc[0] = fma(x * x, gamma_sq_inv, acc[0]);	// a1 = x * x / gamma_squared;
+		acc[1] = fma(x * y, gamma_sq_inv, acc[1]);	// b1 = x * y / gamma_squared;
+		acc[2] = fma(x * z, gamma_sq_inv, acc[2]);	// c1 = x * z / gamma_squared;
+		acc[3] = fma(x,	 gamma_sq_inv, acc[3]);		// d1 = x / gamma_squared;
 
-		acc[4] += y * y * gamma_squared_inv; // b2 = y * y / gamma_squared;
-		acc[5] += y * z * gamma_squared_inv; // c2 = y * z / gamma_squared;
-		acc[6] += y * gamma_squared_inv;     // d2 = y / gamma_squared;
+		acc[4] = fma(y * y, gamma_sq_inv, acc[4]);	// b2 = y * y / gamma_squared;
+		acc[5] = fma(y * z, gamma_sq_inv, acc[5]);	// c2 = y * z / gamma_squared;
+		acc[6] = fma(y,	 gamma_sq_inv, acc[6]);		// d2 = y / gamma_squared;
 
-		acc[7] += z * z * gamma_squared_inv; // c3 = z * z / gamma_squared;
-		acc[8] += z * gamma_squared_inv;     // d3 = z / gamma_squared;
+		acc[7] = fma(z * z, gamma_sq_inv, acc[7]);	// c3 = z * z / gamma_squared;
+		acc[8] = fma(z,	 gamma_sq_inv, acc[8]);		// d3 = z / gamma_squared;
 
-		acc[9]  += gamma_squared_inv;        // d4 = 1 / gamma_squared;
+		acc[9] = fma(1.0,   gamma_sq_inv, acc[9]);	// d4 = 1 / gamma_squared;
 
-		rhs[0] += x * gamma_inv;             // r1 = x / gamma;
-		rhs[1] += y * gamma_inv;             // r2 = y / gamma;
-		rhs[2] += z * gamma_inv;             // r3 = z / gamma;
-		rhs[3] += gamma_inv;                 // r4 = 1 / gamma;
+		// RHS
+		rhs[0] = fma(x, gamma_inv, rhs[0]);			// r1 = x / gamma;
+		rhs[1] = fma(y, gamma_inv, rhs[1]);			// r2 = y / gamma;
+		rhs[2] = fma(z, gamma_inv, rhs[2]);			// r3 = z / gamma;
+		rhs[3] = fma(1.0, gamma_inv, rhs[3]);			// r4 = 1 / gamma;
 	}
 
 	const double A[16] = {
