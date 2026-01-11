@@ -1,8 +1,13 @@
 #pragma once
 
+namespace geom {
+using real = double;
+using real3 = double3;
+} // namespace geom
+
 namespace consts {
 
-constexpr double reg_term = 1e-6;
+constexpr geom::real reg_term = 1e-6;
 
 }
 
@@ -11,11 +16,11 @@ namespace geom {
 struct Plane
 {
 	int id;
-	double a, b, c, d;
+	real a, b, c, d;
 };
 
 using PlaneList = std::vector<Plane>;
-using BasisList = std::vector<double3>;
+using BasisList = std::vector<real3>;
 
 } // namespace geom
 

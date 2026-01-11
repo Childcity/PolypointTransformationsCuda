@@ -1,6 +1,7 @@
 #include <cmath>
 #include <direct.h>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <numeric>
 #include <sstream>
@@ -32,7 +33,12 @@ vector<geom::Plane> readPlanesTxt(const string &filePath)
 
 	ifstream file(filePath);
 	for (double a, b, c, d; file >> a >> b >> c >> d;) {
-		inPlanes.emplace_back(geom::Plane{0, a, b, c, d});
+		inPlanes.emplace_back(geom::Plane{
+		    0,
+		    static_cast<geom::real>(a),
+		    static_cast<geom::real>(b),
+		    static_cast<geom::real>(c),
+		    static_cast<geom::real>(d)});
 	}
 
 	return inPlanes;
@@ -67,7 +73,12 @@ vector<geom::Plane> readPlanesBin(const string &filePath)
 	// Convert to Planes
 	inPlanes.reserve(data.size() / 4);
 	for (size_t i = 0; i < data.size(); i += 4) {
-		inPlanes.push_back(geom::Plane{0, data[i], data[i + 1], data[i + 2], data[i + 3]});
+		inPlanes.push_back(geom::Plane{
+		    0,
+		    static_cast<geom::real>(data[i]),
+		    static_cast<geom::real>(data[i + 1]),
+		    static_cast<geom::real>(data[i + 2]),
+		    static_cast<geom::real>(data[i + 3])});
 	}
 
 	return inPlanes;
@@ -145,7 +156,7 @@ geom::PlaneList threadChunkApproach(
 
 int main(int argc, char *argv[])
 {
-	const int runEachExperiment = 3;
+	const int runEachExperiment = 1;
 
 	char cwd[256];
 	cout << "Working dir " << _getcwd(cwd, sizeof(cwd)) << "\n";
@@ -159,7 +170,8 @@ int main(int argc, char *argv[])
 	// clang-format off
 	ostringstream oss;
 	oss << "Read " << inPlanes.size() << " planes in " << timer.elapsedSec() << " seconds\n";
-	oss << "Last plane: " << inPlanes.back().a << " " << inPlanes.back().b << " " << inPlanes.back().c << " " << inPlanes.back().d << "\n\n";
+	oss << "Last plane: " << inPlanes.back().a << " " << inPlanes.back().b << " " << inPlanes.back().c << " " << inPlanes.back().d << "\n";
+	oss << "Data Type: " << typeid(geom::real).name() << "\n\n";
 	cout << oss.str();
 
 	auto basis_in = geom::BasisList{
@@ -178,6 +190,13 @@ int main(int argc, char *argv[])
 			geom::PlaneList result;
 			gpu::deformPlanesPolypoint(result, inPlanes, basis_in, basis_out);
 			times.push_back(t.elapsedSec());
+
+			// Print result
+			// for (const auto &p : std::vector(result.begin() + 10000, result.begin() + 10000 +
+			// 200)) { 	std::cout << std::fixed << std::setprecision(50) << p.a << ";" << p.b << ";"
+			//<< p.c
+			//	          << ";" << p.d << "\n";
+			//}
 		}
 
 		double avg = accumulate(times.begin(), times.end(), 0.0) / runEachExperiment;
